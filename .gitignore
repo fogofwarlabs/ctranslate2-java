@@ -1,0 +1,16 @@
+# Gradle
+.gradle/
+build/
+
+# Downloaded sources and native builds of cppbuild.sh
+cppbuild/
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Crash logs
+hs_err_pid*.log
+replay_pid*.log

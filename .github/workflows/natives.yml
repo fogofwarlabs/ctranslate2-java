@@ -1,0 +1,83 @@
+name: Natives
+
+# The native jars: CTranslate2 and the JNI library of each platform, built and tested on a runner of that platform, kept as the
+# workflow artifacts native-<platform>. The test that translates is skipped: the runners have no model.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  natives:
+    name: native (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x86_64
+            runner: windows-latest
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: macosx-arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep line endings
+        run: git config --global core.autocrlf false
+
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up the JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # The installed headers and libraries of cppbuild.sh, per platform and script content (which pins every version).
+      - name: Cache the native build
+        uses: actions/cache@v5
+        with:
+          path: |
+            cppbuild/${{ matrix.platform }}/include
+            cppbuild/${{ matrix.platform }}/lib
+            cppbuild/${{ matrix.platform }}/bin
+            cppbuild/${{ matrix.platform }}/.cppbuild
+          key: cppbuild-${{ matrix.platform }}-${{ hashFiles('cppbuild.sh') }}
+
+      - name: Build CTranslate2
+        run: bash ./cppbuild.sh ${{ matrix.platform }}
+
+      - name: Build and test
+        run: ./gradlew build
+
+      - name: Upload the native jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.platform }}
+          path: build/libs/ctranslate2-java-*-${{ matrix.platform }}.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-${{ matrix.platform }}
+          path: |
+            build/reports/
+            build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

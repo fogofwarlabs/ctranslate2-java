@@ -1,0 +1,38 @@
+ctranslate2-java
+Copyright 2026 Fog of War Labs (https://fogofwarlabs.org)
+
+This product is licensed under the Apache License, Version 2.0 (LICENSE).
+
+Third-party material
+====================
+
+The native jars carry the libraries below, compiled from source by cppbuild.sh. Each native jar carries the licence texts in
+org/fogofwarlabs/ctranslate2/<platform>/licenses/, and every jar carries LICENSE and this NOTICE in META-INF/. Which platform carries
+which library is given in brackets.
+
+CTranslate2 4.9.1 (https://github.com/OpenNMT/CTranslate2) [all platforms]
+  MIT License. Text: licenses/CTranslate2-MIT.txt.
+  It includes code under its own licences:
+  - spdlog, with the fmt library: MIT License. Text: licenses/spdlog-MIT.txt.
+  - JSON for Modern C++ 3.11.2 (nlohmann/json): MIT License. Text: licenses/nlohmann-json-MIT.txt.
+  - half 2.2.0 (half_float): MIT License; avx_mathfun.h: MIT License and zlib License; neon_mathfun.h: zlib License.
+    Texts: licenses/CTranslate2-third-party-headers.txt.
+  - avx512_mathfun.h from SIMD_Utils: BSD 2-Clause License. Text: licenses/simd_utils-BSD-2-Clause.txt.
+  - BS::thread_pool [macosx-arm64]: MIT License. Text: licenses/BS_thread_pool-MIT.txt.
+  - cpu_features [windows-x86_64, linux-x86_64]: Apache License 2.0. Text: licenses/cpu_features-Apache-2.0.txt.
+  - ruy [linux-arm64, macosx-arm64]: Apache License 2.0. Text: licenses/ruy-Apache-2.0.txt.
+  - cpuinfo, used by ruy [linux-arm64, macosx-arm64]: BSD 2-Clause License. Text: licenses/cpuinfo-BSD-2-Clause.txt.
+
+oneDNN 3.1.1 (https://github.com/uxlfoundation/oneDNN) [windows-x86_64, linux-x86_64]
+  Apache License 2.0. Text: licenses/oneDNN-Apache-2.0.txt.
+  Its third-party components and their licences: licenses/oneDNN-THIRD-PARTY-PROGRAMS.txt.
+
+OpenBLAS 0.3.30 (https://github.com/OpenMathLib/OpenBLAS) [linux-arm64]
+  BSD 3-Clause License. Text: licenses/OpenBLAS-BSD-3-Clause.txt.
+
+GNU OpenMP runtime library, libgomp.so.1 of GCC [linux-x86_64, linux-arm64]
+  GNU General Public License 3 with the GCC Runtime Library Exception 3.1. Texts: licenses/GPL-3.0.txt,
+  licenses/GCC-Runtime-Library-Exception-3.1.txt. Sources: https://gcc.gnu.org.
+
+The Windows native jar uses the Microsoft Visual C++ runtime and OpenMP runtime (vcomp140.dll) of the org.bytedeco:javacpp
+windows-x86_64 jar, and the macOS native jar uses Apple Accelerate of the operating system; neither is part of these jars.

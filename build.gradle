@@ -1,0 +1,269 @@
+import com.vanniktech.maven.publish.DeploymentValidation
+import com.vanniktech.maven.publish.JavaLibrary
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SourcesJar
+
+plugins {
+    id 'java-library'
+    id 'com.vanniktech.maven.publish' version '0.37.0'
+}
+
+// The platforms of the native jars (JavaCPP platform names). -PjavacppPlatform picks one, the default is the platform of this machine;
+// -PjavacppPlatformExtension (for example -gpu) picks a variant that cppbuild.sh built with that extension.
+def supportedPlatforms = ['windows-x86_64', 'linux-x86_64', 'linux-arm64', 'macosx-arm64']
+def detectPlatform = {
+    def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    def osArch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+    def os = osName.startsWith('windows') ? 'windows' : osName.startsWith('mac') ? 'macosx' : osName.startsWith('linux') ? 'linux' : osName
+    def arch = osArch in ['amd64', 'x86_64'] ? 'x86_64' : osArch in ['aarch64', 'arm64'] ? 'arm64' : osArch
+    return os + '-' + arch
+}
+def javacppPlatform = providers.gradleProperty('javacppPlatform').getOrElse(detectPlatform())
+def javacppPlatformExtension = providers.gradleProperty('javacppPlatformExtension').getOrElse('')
+def nativeClassifier = javacppPlatform + javacppPlatformExtension
+if (!(javacppPlatform in supportedPlatforms)) {
+    throw new GradleException('Unsupported platform ' + javacppPlatform + '; supported are ' + supportedPlatforms.join(', ') + '.')
+}
+def javacppVersion = providers.gradleProperty('javacppVersion').get()
+
+// The output of cppbuild.sh for this platform: include/, lib/ and, on Windows, bin/ with the DLL.
+def cppbuildDirectory = file('cppbuild/' + nativeClassifier)
+def includeDirectory = new File(cppbuildDirectory, 'include')
+def generatedSourceDirectory = layout.buildDirectory.dir('generated/sources/javacpp')
+def nativeDirectory = layout.buildDirectory.dir('native/' + nativeClassifier)
+def nativePackagePath = 'org/fogofwarlabs/ctranslate2/' + nativeClassifier
+
+def licenseFiles = files('LICENSE', 'NOTICE')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+sourceSets {
+    // The preset class alone: the parser reads it before the generated classes exist.
+    presets {
+        java {
+            srcDirs = ['src/main/java']
+            include 'org/fogofwarlabs/ctranslate2/presets/**'
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api "org.bytedeco:javacpp:$javacppVersion"
+    presetsImplementation "org.bytedeco:javacpp:$javacppVersion"
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly "org.bytedeco:javacpp:$javacppVersion:$javacppPlatform"
+    testRuntimeOnly files(nativeDirectory)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+// The MSVC environment (cl.exe, INCLUDE, LIB) for the JavaCPP compiler on Windows, read from vcvars64.bat of the newest Visual Studio
+// when cl.exe is not on the PATH already (as in a developer prompt).
+def msvcEnvironment = providers.provider {
+    if (!javacppPlatform.startsWith('windows') || System.getenv('VCToolsInstallDir') != null) {
+        return [:]
+    }
+    def vswhere = new File(System.getenv('ProgramFiles(x86)') ?: 'C:/Program Files (x86)', 'Microsoft Visual Studio/Installer/vswhere.exe')
+    if (!vswhere.isFile()) {
+        throw new GradleException('Cannot find vswhere.exe; run the build from a Visual Studio developer prompt.')
+    }
+    def installation = [vswhere.absolutePath, '-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+                        '-property', 'installationPath'].execute().text.trim()
+    def vcvars = new File(installation, 'VC/Auxiliary/Build/vcvars64.bat')
+    if (!vcvars.isFile()) {
+        throw new GradleException('Cannot find vcvars64.bat of Visual Studio with the C++ tools.')
+    }
+    def output = ['cmd', '/c', 'call "' + vcvars.absolutePath + '" > nul && set'].execute().text
+    return output.readLines().findAll { line -> line.contains('=') }.collectEntries { line ->
+        def separator = line.indexOf('=')
+        [(line.substring(0, separator)): line.substring(separator + 1)]
+    }
+}
+
+def checkCppbuild = { Task task ->
+    task.doFirst {
+        if (!new File(cppbuildDirectory, '.cppbuild').isFile()) {
+            throw new GradleException('Build the native library first: ./cppbuild.sh ' + javacppPlatform +
+                                      (javacppPlatformExtension ? ' ' + javacppPlatformExtension : ''))
+        }
+    }
+}
+
+// Parses the CTranslate2 headers into the Java classes of org.fogofwarlabs.ctranslate2.
+def javacppParser = tasks.register('javacppParser', JavaExec) { task ->
+    group = 'build'
+    description = 'Generates the Java classes from the CTranslate2 headers.'
+    dependsOn 'presetsClasses'
+    classpath = sourceSets.presets.runtimeClasspath
+    mainClass = 'org.bytedeco.javacpp.tools.Builder'
+    inputs.dir(includeDirectory).withPropertyName('includeDirectory')
+    inputs.files(sourceSets.presets.output).withPropertyName('presets')
+    outputs.dir(generatedSourceDirectory)
+    args '-properties', javacppPlatform,
+         '-Dplatform.extension=' + javacppPlatformExtension,
+         '-Dplatform.includepath=' + includeDirectory.absolutePath,
+         '-classpath', sourceSets.presets.output.classesDirs.asPath,
+         '-d', generatedSourceDirectory.get().asFile.absolutePath,
+         'org.fogofwarlabs.ctranslate2.presets.ctranslate2'
+    checkCppbuild(task)
+    doFirst {
+        delete generatedSourceDirectory
+    }
+}
+// The generated classes are main sources, built by the parser (for compileJava, sourcesJar and javadoc).
+sourceSets.main.java.srcDir(files(generatedSourceDirectory).builtBy(javacppParser))
+
+// Compiles the JNI library and copies it with the CTranslate2 library (and the OpenMP runtime on Linux) to build/native.
+def javacppBuild = tasks.register('javacppBuild', JavaExec) { task ->
+    group = 'build'
+    description = 'Compiles the JNI library of ' + nativeClassifier + '.'
+    dependsOn 'classes'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.bytedeco.javacpp.tools.Builder'
+    def libraryPath = [new File(cppbuildDirectory, 'lib'), new File(cppbuildDirectory, 'bin')]*.absolutePath.join(File.pathSeparator)
+    def outputDirectory = nativeDirectory.get().dir(nativePackagePath).asFile
+    inputs.dir(cppbuildDirectory).withPropertyName('cppbuild')
+    inputs.files(sourceSets.main.output).withPropertyName('classes')
+    outputs.dir(nativeDirectory)
+    args '-properties', javacppPlatform,
+         '-Dplatform.extension=' + javacppPlatformExtension,
+         '-Dplatform.includepath=' + includeDirectory.absolutePath,
+         '-Dplatform.linkpath=' + new File(cppbuildDirectory, 'lib').absolutePath,
+         '-Dplatform.preloadpath=' + libraryPath,
+         '-copylibs', '-copyresources',
+         // An explicit class path: without it the Builder scans the working directory too.
+         '-classpath', sourceSets.main.output.classesDirs.asPath,
+         '-d', outputDirectory.absolutePath,
+         'org.fogofwarlabs.ctranslate2.**'
+    checkCppbuild(task)
+    doFirst {
+        delete nativeDirectory
+        environment msvcEnvironment.get()
+    }
+}
+
+// The native jar of this platform: the libraries under org/fogofwarlabs/ctranslate2/<platform>/, where the JavaCPP Loader looks.
+def nativeJar = tasks.register('nativeJar', Jar) {
+    group = 'build'
+    description = 'Assembles the native jar of ' + nativeClassifier + '.'
+    dependsOn javacppBuild
+    archiveClassifier = nativeClassifier
+    from(nativeDirectory) {
+        exclude '**/*.exp', '**/*.lib', '**/*.obj', '**/*.cpp', '**/*.h'
+    }
+    from(file('licenses')) {
+        into nativePackagePath + '/licenses'
+    }
+}
+tasks.named('assemble') {
+    dependsOn nativeJar
+}
+
+tasks.withType(Jar).configureEach {
+    metaInf {
+        from(licenseFiles)
+    }
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    // The generated classes carry the comments of the C++ headers, which are no valid javadoc.
+    options.addBooleanOption('Xdoclint:none', true)
+    options.addStringOption('Xmaxwarns', '1')
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    dependsOn javacppBuild
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    // The model test runs with -Pctranslate2.test.model=<model dir> -Pctranslate2.test.sentencepiece=... or the environment variable
+    // CTRANSLATE2_TEST_MODEL, and is skipped without it.
+    def model = providers.gradleProperty('ctranslate2.test.model').orElse(providers.environmentVariable('CTRANSLATE2_TEST_MODEL'))
+    if (model.isPresent()) {
+        systemProperty 'ctranslate2.test.model', model.get()
+    }
+    systemProperty 'org.bytedeco.javacpp.cachedir', layout.buildDirectory.dir('tmp/javacpp-cache').get().asFile.absolutePath
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+}
+
+// Publishing: the Java classes, the sources and the javadoc, and one native jar per platform as classifiers of the same artifact (the
+// JavaCPP convention). The native jars of the other platforms come from -PnativeJarsDirectory (the jars that their runners built).
+def projectUrl = 'https://github.com/fogofwarlabs/ctranslate2-java'
+def signingKey = providers.gradleProperty('signingInMemoryKey').filter { key -> !key.isBlank() }
+
+mavenPublishing {
+    configure(new JavaLibrary(new JavadocJar.Javadoc(), new SourcesJar.Sources()))
+    coordinates(project.group.toString(), 'ctranslate2-java', project.version.toString())
+    publishToMavenCentral(true, DeploymentValidation.VALIDATED)
+    // publishToMavenLocal works without a key.
+    if (signingKey.isPresent()) {
+        signAllPublications()
+    }
+    pom {
+        name = 'ctranslate2-java'
+        description = 'Java bindings for CTranslate2, generated with JavaCPP, with native libraries for Windows, Linux and macOS.'
+        url = projectUrl
+        licenses {
+            license {
+                name = 'Apache-2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+            }
+            license {
+                name = 'MIT (CTranslate2)'
+                url = 'https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE'
+            }
+        }
+        developers {
+            developer {
+                id = 'fogofwarlabs'
+                name = 'Fog of War Labs'
+                url = 'https://fogofwarlabs.org'
+            }
+        }
+        scm {
+            url = projectUrl
+            connection = 'scm:git:' + projectUrl + '.git'
+            developerConnection = 'scm:git:ssh://git@github.com/fogofwarlabs/ctranslate2-java.git'
+        }
+    }
+}
+
+publishing.publications.withType(MavenPublication).configureEach { publication ->
+    publication.artifact(nativeJar)
+    def nativeJarsDirectory = providers.gradleProperty('nativeJarsDirectory')
+    if (nativeJarsDirectory.isPresent()) {
+        (supportedPlatforms - javacppPlatform).each { platform ->
+            def classifier = platform + javacppPlatformExtension
+            def jar = file(nativeJarsDirectory.get() + '/ctranslate2-java-' + project.version + '-' + classifier + '.jar')
+            if (!jar.isFile()) {
+                throw new GradleException('The native jar ' + jar + ' is missing.')
+            }
+            publication.artifact(jar) {
+                it.classifier = classifier
+            }
+        }
+    }
+}
+
+// Plain POM metadata like the JavaCPP presets: the native jars are classifiers, which Gradle module metadata has no variant for.
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
