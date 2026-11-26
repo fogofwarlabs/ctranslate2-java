@@ -71,7 +71,8 @@ jobs:
   release:
     name: release
     needs: [version, natives]
-    runs-on: ubuntu-latest
+    # The runner of the linux-x86_64 natives, whose native build cache it restores.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Check out

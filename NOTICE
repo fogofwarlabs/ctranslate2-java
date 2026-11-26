@@ -6,9 +6,9 @@ This product is licensed under the Apache License, Version 2.0 (LICENSE).
 Third-party material
 ====================
 
-The native jars carry the libraries below, compiled from source by cppbuild.sh. Each native jar carries the licence texts in
-org/fogofwarlabs/ctranslate2/<platform>/licenses/, and every jar carries LICENSE and this NOTICE in META-INF/. Which platform carries
-which library is given in brackets.
+The native jars carry the libraries below, compiled from source by cppbuild.sh, except Intel oneMKL and Intel OpenMP, which come
+in binary form from Intel's packages. Each native jar carries the licence texts in org/fogofwarlabs/ctranslate2/<platform>/licenses/,
+and every jar carries LICENSE and this NOTICE in META-INF/. Which platform carries which library is given in brackets.
 
 CTranslate2 4.9.1 (https://github.com/OpenNMT/CTranslate2) [all platforms]
   MIT License. Text: licenses/CTranslate2-MIT.txt.
@@ -27,6 +27,16 @@ oneDNN 3.1.1 (https://github.com/uxlfoundation/oneDNN) [windows-x86_64, linux-x8
   Apache License 2.0. Text: licenses/oneDNN-Apache-2.0.txt.
   Its third-party components and their licences: licenses/oneDNN-THIRD-PARTY-PROGRAMS.txt.
 
+Intel oneAPI Math Kernel Library (oneMKL) 2025.3.0 [windows-x86_64, linux-x86_64]
+  Copyright Intel Corporation. https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html
+  The static libraries of the mkl-static package of Intel on PyPI, linked into the CTranslate2 library.
+  Intel Simplified Software License (Version October 2022). Text: licenses/oneMKL-Intel-Simplified-Software-License.txt.
+
+Intel OpenMP runtime library 2025.3.0, libiomp5md.dll [windows-x86_64]
+  Copyright Intel Corporation. From the intel-openmp package of Intel on PyPI. Intel End User License Agreement for Developer Tools
+  (Version August 2024). Text: licenses/Intel-OpenMP-EULA-Developer-Tools.txt.
+  Its third-party components and their licences: licenses/Intel-OpenMP-THIRD-PARTY-PROGRAMS.txt.
+
 OpenBLAS 0.3.30 (https://github.com/OpenMathLib/OpenBLAS) [linux-arm64]
   BSD 3-Clause License. Text: licenses/OpenBLAS-BSD-3-Clause.txt.
 
@@ -34,5 +44,5 @@ GNU OpenMP runtime library, libgomp.so.1 of GCC [linux-x86_64, linux-arm64]
   GNU General Public License 3 with the GCC Runtime Library Exception 3.1. Texts: licenses/GPL-3.0.txt,
   licenses/GCC-Runtime-Library-Exception-3.1.txt. Sources: https://gcc.gnu.org.
 
-The Windows native jar uses the Microsoft Visual C++ runtime and OpenMP runtime (vcomp140.dll) of the org.bytedeco:javacpp
-windows-x86_64 jar, and the macOS native jar uses Apple Accelerate of the operating system; neither is part of these jars.
+The Windows native jar uses the Microsoft Visual C++ runtime of the org.bytedeco:javacpp windows-x86_64 jar, and the macOS native
+jar uses Apple Accelerate of the operating system; neither is part of these jars.
