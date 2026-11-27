@@ -22,12 +22,14 @@ The first artifact holds the Java classes; the classifier `<platform>` holds the
 
 | Platform | float32 GEMM | int8 GEMM | Threads |
 |---|---|---|---|
-| `windows-x86_64` | oneDNN 3.1.1 | oneDNN 3.1.1 | MSVC OpenMP (`vcomp140.dll` of the JavaCPP jar) |
-| `linux-x86_64` | oneDNN 3.1.1 | oneDNN 3.1.1 | GNU OpenMP (`libgomp.so.1`, in the native jar) |
+| `windows-x86_64` | oneMKL 2025.3.0, oneDNN 3.1.1 | oneMKL 2025.3.0, oneDNN 3.1.1 | Intel OpenMP (`libiomp5md.dll`, in the native jar) |
+| `linux-x86_64` | oneMKL 2025.3.0, oneDNN 3.1.1 | oneMKL 2025.3.0, oneDNN 3.1.1 | GNU OpenMP (`libgomp.so.1`, in the native jar) |
 | `linux-arm64` | OpenBLAS 0.3.30 | Ruy | GNU OpenMP (`libgomp.so.1`, in the native jar) |
 | `macosx-arm64` | Apple Accelerate | Ruy | CTranslate2 thread pool |
 
-The backends are linked statically into the CTranslate2 library. Intel MKL is not used. GPU builds are not provided yet.
+The x86_64 platforms are built like the CTranslate2 Python wheels: CTranslate2 uses Intel oneMKL on Intel processors and oneDNN on other processors; the environment variable `CT2_USE_MKL` overrides the choice.
+
+The backends are linked statically into the CTranslate2 library. GPU builds are not provided yet.
 
 ## Usage
 
@@ -51,14 +53,14 @@ Tokenization (for example SentencePiece) is not part of this binding.
 
 ## Building
 
-Requirements: JDK 25 (the classes target Java 17), CMake 3.24 or newer, Git and Bash; a C++17 compiler (Visual Studio 2022 or newer on Windows, GCC on Linux, Xcode on macOS).
+Requirements: JDK 25 (the classes target Java 17), CMake 3.24 or newer, Git, Bash, curl and unzip; a C++17 compiler (Visual Studio 2022 or newer on Windows, GCC on Linux, Xcode on macOS).
 
 ```
 ./cppbuild.sh <platform>
 ./gradlew build
 ```
 
-`cppbuild.sh` downloads the pinned sources to `cppbuild/src/` and installs the headers and libraries to `cppbuild/<platform>/`. On Windows it runs in Git Bash and uses the Visual Studio generator of CMake; Gradle finds the Visual Studio compiler with `vswhere`.
+`cppbuild.sh` downloads the pinned sources and, for x86_64, the pinned Intel oneMKL and Intel OpenMP packages of Intel on PyPI to `cppbuild/src/` and installs the headers and libraries to `cppbuild/<platform>/`. On Windows it runs in Git Bash and uses the Visual Studio generator of CMake; Gradle finds the Visual Studio compiler with `vswhere`.
 
 `./gradlew build` generates the Java classes, compiles the JNI library, runs the tests and assembles `build/libs/ctranslate2-java-<version>.jar` and `build/libs/ctranslate2-java-<version>-<platform>.jar`.
 

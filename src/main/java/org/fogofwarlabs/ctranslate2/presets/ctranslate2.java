@@ -46,8 +46,8 @@ import org.bytedeco.javacpp.tools.InfoMapper;
             }
         ),
         @Platform(value = {"linux", "macosx"}, link = "ctranslate2@.4"),
-        @Platform(value = "windows", link = "ctranslate2"),
-        // GNU OpenMP, bundled in the native jar; Windows uses vcomp140 of the JavaCPP jar, macOS no OpenMP.
+        // The OpenMP runtime, bundled in the native jar: Intel OpenMP on Windows, GNU OpenMP on Linux; macOS uses no OpenMP.
+        @Platform(value = "windows", link = "ctranslate2", preload = "libiomp5md"),
         @Platform(value = "linux", preload = "gomp@.1")
     },
     target = "org.fogofwarlabs.ctranslate2",
